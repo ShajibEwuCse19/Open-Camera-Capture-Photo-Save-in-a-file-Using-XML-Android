@@ -14,10 +14,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
-    private final  val REQUEST_CODE = 101
-    private final val CAMERA_REQUEST_CODE = 102
+    private val REQUEST_CODE = 101
+    private val CAMERA_REQUEST_CODE = 102
     private var file: File? = null
 
     private var imageView: ImageView? = null
@@ -53,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
-        if (requestCode == REQUEST_CODE && grantResults[0] == PERMISSION_GRANTED && grantResults.isNotEmpty()) {
+        if (requestCode == REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PERMISSION_GRANTED) {
             openCamera()
         } else {
             Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show()
@@ -61,54 +64,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    //if the file is not null then open the camera
+    // Open the camera and capture the photo
     private fun openCamera() {
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        file = getImageFile()
-        if (file != null) {
-            val uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".fileprovider", file!!)
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri)
-            //intent.putExtra(MediaStore.EXTRA_OUTPUT, file?.absolutePath)
+        file = createImageFile()
+
+        file?.let {
+            val photoURI = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                it
+            )
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
             startActivityForResult(intent, CAMERA_REQUEST_CODE)
-        } else {
-            Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Android-specific path information.
-    private fun getImageFile(): File? {
-        try {
-            var path = getExternalFilesDir(null)?.absolutePath
-            //system time added for unique file name
-            var imageFile = File(path, "imageFile1" + System.currentTimeMillis().toString())
-            if (!imageFile.exists()) {
-                val isCreated = imageFile.createNewFile()
-
-                if (isCreated) {
-                    return imageFile
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+    // Create a temporary file to store the captured image
+    private fun createImageFile(): File? {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val storageDir = cacheDir // You can also use externalCacheDir or getExternalFilesDir() for permanent storage
+        return try {
+            File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir)
+        } catch (e: IOException) {
+            Log.e("MainActivity", "Error creating file", e)
+            null
         }
-        return null
     }
 
+    // Handle the captured image result
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        Log.d("onActivityResult", "data: $data requestCode: $requestCode resultCode: $resultCode RESULT_OK: $RESULT_OK")
-        if(requestCode == CAMERA_REQUEST_CODE && resultCode == RESULT_OK) {
-            var imagePath = file?.absolutePath
-            try {
-                var bitmap = BitmapFactory.decodeFile(imagePath)
+        if (requestCode == CAMERA_REQUEST_CODE && resultCode == RESULT_OK) {
+            file?.let {
+                val bitmap = BitmapFactory.decodeFile(it.absolutePath)
                 imageView?.setImageBitmap(bitmap)
-
-            }catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            var testData = data?.data
         }
     }
 }
